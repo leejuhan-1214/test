@@ -588,6 +588,20 @@ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width:
 .online-event-log > b { color: var(--cyan); font-size: 7px; letter-spacing: 1px; }
 .online-event-log p { margin: 5px 0 0; color: rgba(255,255,255,.62); font-size: 6px; line-height: 1.35; }
 .online-event-log p.super,.online-event-log p.critical { color: #ffd166; }.online-event-log p.faint { color: #ff9999; }
+.battle-log.super { color: #342500; border: 1px solid #ffe08a; background: linear-gradient(135deg,#fff5c2,#ffd166); box-shadow: 0 0 28px rgba(255,209,102,.48); }
+.battle-log.resist { color: #dce5ff; border: 1px solid rgba(135,159,255,.5); background: rgba(37,48,111,.92); }
+.battle-log.immune { color: #f1f2f7; border: 1px solid rgba(255,255,255,.35); background: rgba(52,54,69,.94); }
+.battle-log.critical { color: #fff0f0; border: 1px solid rgba(255,115,115,.55); background: rgba(105,35,55,.94); }
+.battle-log.message-pop { animation: battleMessagePop .34s ease-out; }
+.battle-effect-banner { position: absolute; z-index: 9; left: 50%; top: 133px; transform: translateX(-50%); padding: 7px 13px; border-radius: 999px; font-size: 8px; font-weight: 950; letter-spacing: .2px; }
+.battle-effect-banner.super { color: #342500; background: #ffd166; box-shadow: 0 0 24px rgba(255,209,102,.45); }
+.battle-effect-banner.resist { color: #e4eaff; background: #34427d; }
+.battle-effect-banner.immune { color: #f0f1f5; background: #4b4d59; }
+.move-matchup { margin-top: 5px !important; padding: 3px 6px; width: fit-content; border-radius: 999px; color: rgba(255,255,255,.7) !important; background: rgba(255,255,255,.08); font-weight: 900; }
+.move-matchup.super { color: #2c2100 !important; background: #ffd166; }
+.move-matchup.resist { color: #dbe4ff !important; background: #34427d; }
+.move-matchup.immune { color: #e5e6ec !important; background: #494b58; }
+@keyframes battleMessagePop { from { transform: translateX(-50%) scale(.9); opacity: .25; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
 .online-status-panel section > p { margin: 7px 0 0; color: rgba(255,255,255,.48); font-size: 7px; }
 
 @media (max-width: 820px) {

@@ -150,7 +150,7 @@ function abilityImmunity(battle,actor,target,move) {
 }
 function damageResult(actor,target,move) {
   const atkKey=move.category==="physical"?"attack":"spAttack", defKey=move.category==="physical"?"defense":"spDefense";
-  let attack=effectiveStat(actor,atkKey), defense=effectiveStat(target,defKey), power=Math.max(1,Number(move.power)||1);
+  let attack=effectiveStat(actor,atkKey), defense=effectiveStat(target,defKey), power=move.variablePower?60:Math.max(1,Number(move.power)||1);
   const source=abilityId(actor), defender=abilityId(target);
   if (source==="technician" && power<=60) power*=1.5;
   if (source==="toughclaws" && move.contact) power*=1.3;
@@ -188,7 +188,12 @@ function useMove(battle,side,action) {
   }
   if (move.category==="status" && move.targetStages) { applyStages(battle,target,move.targetStages,true); return; }
   const result=damageResult(actor,target,move);
+  let hits=1;
+  if(Array.isArray(move.multihit)){const min=clamp(move.multihit[0],1,10),max=clamp(move.multihit[1],min,10);hits=min+Math.floor(Math.random()*(max-min+1));}
+  else if(Number(move.multihit)>1)hits=clamp(move.multihit,1,10);
+  if(result.effect!==0){if(move.ohko)result.damage=target.currentHp;else if(move.fixedDamage==="level")result.damage=actor.level;else if(Number(move.fixedDamage)>0)result.damage=Number(move.fixedDamage);else result.damage*=hits;}
   target.currentHp=Math.max(0,target.currentHp-result.damage);
+  if(hits>1)log(battle,`${hits}번 맞았다!`,`message`);
   if (result.effect===0) log(battle,`${target.name}에게는 효과가 없다…`,`immune`);
   else {
     if (result.critical) log(battle,`급소에 맞았다!`,`critical`);
@@ -209,6 +214,7 @@ function useMove(battle,side,action) {
   }
   if (move.contact && target.currentHp>0 && abilityId(target)==="static" && Math.random()<.3) inflictStatus(battle,actor,"paralysis");
   if (move.contact && target.currentHp>0 && abilityId(target)==="flamebody" && Math.random()<.3) inflictStatus(battle,actor,"burn");
+  if (move.selfDestruct) { actor.currentHp=0;actor.fainted=true; }
   if (target.currentHp<=0) { target.fainted=true; log(battle,`${target.name}은 쓰러졌다!`,`faint`); }
   if (actor.currentHp<=0) { actor.fainted=true; log(battle,`${actor.name}도 쓰러졌다!`,`faint`); }
 }
