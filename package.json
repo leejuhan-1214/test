@@ -8,6 +8,9 @@
     "start": "node server.js",
     "check": "node --check server.js && node --check battle-engine.js && node --check multiplayer.js && node --check app-v2.js"
   },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  },
   "engines": {
     "node": ">=20"
   }

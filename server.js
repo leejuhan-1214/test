@@ -13,6 +13,8 @@ const DATA_DIR = process.env.ISHS_DATA_DIR ? path.resolve(process.env.ISHS_DATA_
 const STORE_FILE = path.join(DATA_DIR,"store.json");
 const BACKUP_FILE = path.join(DATA_DIR,"store.backup.json");
 const PORT = Number(process.env.PORT) || 4173;
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+let database = null;
 const ADMIN_PASSWORD_HASH = process.env.ISHS_ADMIN_PASSWORD_HASH || (process.env.ISHS_ADMIN_PASSWORD
   ? crypto.createHash("sha256").update(process.env.ISHS_ADMIN_PASSWORD).digest("hex")
   : "");
@@ -40,15 +42,42 @@ function loadStore() {
   return emptyStore();
 }
 let store = loadStore();
-function saveStore() {
-  fs.mkdirSync(DATA_DIR,{recursive:true});
+let saveQueue = Promise.resolve();
+async function initializeDatabaseStore() {
+  if(!DATABASE_URL)return;
+  const {neon}=await import("@neondatabase/serverless");
+  database=neon(DATABASE_URL);
+  await database`CREATE TABLE IF NOT EXISTS ishs_arena_store (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    data JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  const rows=await database`SELECT data FROM ishs_arena_store WHERE id = 1`;
+  if(rows.length){store=normalizeStore(rows[0].data);return;}
   store.updatedAt=new Date().toISOString();
+  await database`INSERT INTO ishs_arena_store (id,data,updated_at)
+    VALUES (1,${JSON.stringify(store)}::jsonb,NOW())`;
+}
+async function persistStoreSnapshot(snapshot) {
+  if(database){
+    await database`INSERT INTO ishs_arena_store (id,data,updated_at)
+      VALUES (1,${snapshot}::jsonb,NOW())
+      ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`;
+    return;
+  }
+  fs.mkdirSync(DATA_DIR,{recursive:true});
   const temp=`${STORE_FILE}.tmp`;
-  fs.writeFileSync(temp,JSON.stringify(store,null,2),"utf8");
+  fs.writeFileSync(temp,JSON.stringify(JSON.parse(snapshot),null,2),"utf8");
   if(fs.existsSync(STORE_FILE)){
     try{JSON.parse(fs.readFileSync(STORE_FILE,"utf8"));fs.copyFileSync(STORE_FILE,BACKUP_FILE);}catch{}
   }
   fs.renameSync(temp,STORE_FILE);
+}
+function saveStore() {
+  store.updatedAt=new Date().toISOString();
+  const snapshot=JSON.stringify(store);
+  saveQueue=saveQueue.catch(()=>{}).then(()=>persistStoreSnapshot(snapshot));
+  return saveQueue;
 }
 function send(res,status,data,headers={}) {
   const body=Buffer.from(JSON.stringify(data));
@@ -138,14 +167,14 @@ function serveStatic(req,res,pathname) {
 }
 async function api(req,res,pathname) {
   try {
-    if(req.method==="GET"&&pathname==="/api/health")return send(res,200,{ok:true,version:3,storage:process.env.ISHS_DATA_DIR?"persistent-configured":"user-data",updatedAt:store.updatedAt});
+    if(req.method==="GET"&&pathname==="/api/health")return send(res,200,{ok:true,version:3,storage:database?"neon-postgres":process.env.ISHS_DATA_DIR?"persistent-configured":"user-data",updatedAt:store.updatedAt});
     if(req.method==="POST"&&pathname==="/api/auth/signup"){
       const body=await readJson(req),nickname=normalizeNickname(body.nickname),password=String(body.password||"");
       if(!validNickname(nickname))return fail(res,400,"닉네임은 한글·영문·숫자·밑줄 2~16자로 입력하세요.");
       if(password.length<8||password.length>100)return fail(res,400,"비밀번호는 8자 이상으로 입력하세요.");
       if(store.accounts.some(item=>item.nicknameKey===nickname.toLocaleLowerCase("ko")))return fail(res,409,"이미 사용 중인 닉네임입니다.");
       const salt=crypto.randomBytes(16).toString("hex"),account={id:crypto.randomUUID(),nickname,nicknameKey:nickname.toLocaleLowerCase("ko"),salt,passwordHash:passwordHash(password,salt),createdAt:new Date().toISOString()};
-      store.accounts.push(account);store.teams[account.id]=[];saveStore();const auth=setSession(req,res,account);return send(res,201,{user:safeUser(account)},auth.headers);
+      store.accounts.push(account);store.teams[account.id]=[];await saveStore();const auth=setSession(req,res,account);return send(res,201,{user:safeUser(account)},auth.headers);
     }
     if(req.method==="POST"&&pathname==="/api/auth/login"){
       const body=await readJson(req),nickname=normalizeNickname(body.nickname),account=store.accounts.find(item=>item.nicknameKey===nickname.toLocaleLowerCase("ko"));
@@ -171,12 +200,12 @@ async function api(req,res,pathname) {
     if(req.method==="PUT"&&pathname==="/api/dex"){
       const auth=requireUser(req,res);if(!auth)return;if(!auth.session.admin)return fail(res,403,"도감 관리자 인증이 필요합니다.");
       const body=await readJson(req);if(!Array.isArray(body.monsters)||body.monsters.length>1000)return fail(res,400,"올바른 도감 데이터가 아닙니다.");
-      store.dex=body.monsters;saveStore();return send(res,200,{ok:true,count:store.dex.length});
+      store.dex=body.monsters;await saveStore();return send(res,200,{ok:true,count:store.dex.length});
     }
     if(req.method==="PUT"&&pathname==="/api/me/team"){
       const auth=requireUser(req,res);if(!auth)return;const body=await readJson(req,2*1024*1024);
       if(!Array.isArray(body.team)||body.team.length>6)return fail(res,400,"팀은 최대 6마리까지 저장할 수 있습니다.");
-      store.teams[auth.account.id]=body.team;saveStore();return send(res,200,{ok:true});
+      store.teams[auth.account.id]=body.team;await saveStore();return send(res,200,{ok:true});
     }
     if(req.method==="POST"&&pathname==="/api/rooms"){
       const auth=requireUser(req,res);if(!auth)return;const code=roomCode(),room={code,status:"waiting",createdAt:Date.now(),players:[{userId:auth.account.id,nickname:auth.account.nickname,team:null}],battle:null};rooms.set(code,room);return send(res,201,{room:publicRoom(room,auth.account.id)});
@@ -208,10 +237,17 @@ const server=http.createServer((req,res)=>{
   if(pathname.startsWith("/api/"))return api(req,res,pathname);
   return serveStatic(req,res,pathname);
 });
-server.listen(PORT,"0.0.0.0",()=>{
+async function startServer(){
+  await initializeDatabaseStore();
+  server.listen(PORT,"0.0.0.0",()=>{
   console.log(`ISHS ARENA server: http://localhost:${PORT}`);
   console.log(`영구 데이터 저장 위치: ${DATA_DIR}`);
   console.log("같은 Wi-Fi의 다른 기기는 이 컴퓨터의 IP 주소와 위 포트를 사용하세요.");
+  });
+}
+startServer().catch(error=>{
+  console.error("ISHS ARENA server startup failed:",error?.message||error);
+  process.exitCode=1;
 });
 
 setInterval(()=>{
