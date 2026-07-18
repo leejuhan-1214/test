@@ -161,13 +161,13 @@ function serveStatic(req,res,pathname) {
   if(!file.startsWith(`${path.resolve(ROOT)}${path.sep}`)&&file!==path.resolve(ROOT,"index.html"))return fail(res,403,"접근할 수 없습니다.");
   fs.stat(file,(error,stat)=>{
     if(error||!stat.isFile())return fail(res,404,"파일을 찾을 수 없습니다.");
-    res.writeHead(200,{"Content-Type":mime(file),"Content-Length":stat.size,"Cache-Control":file.endsWith(".html")?"no-cache":"public, max-age=300"});
+    res.writeHead(200,{"Content-Type":mime(file),"Content-Length":stat.size,"Cache-Control":"no-cache, must-revalidate"});
     fs.createReadStream(file).pipe(res);
   });
 }
 async function api(req,res,pathname) {
   try {
-    if(req.method==="GET"&&pathname==="/api/health")return send(res,200,{ok:true,version:4,storage:database?"neon-postgres":process.env.ISHS_DATA_DIR?"persistent-configured":"user-data",updatedAt:store.updatedAt});
+    if(req.method==="GET"&&pathname==="/api/health")return send(res,200,{ok:true,version:"4.1",storage:database?"neon-postgres":process.env.ISHS_DATA_DIR?"persistent-configured":"user-data",updatedAt:store.updatedAt});
     if(req.method==="POST"&&pathname==="/api/auth/signup"){
       const body=await readJson(req),nickname=normalizeNickname(body.nickname),password=String(body.password||"");
       if(!validNickname(nickname))return fail(res,400,"닉네임은 한글·영문·숫자·밑줄 2~16자로 입력하세요.");

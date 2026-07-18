@@ -6,14 +6,14 @@
   <meta name="theme-color" content="#10114b" />
   <title>ISHS ARENA — 몬스터 배틀</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='28' fill='%23725bff'/><circle cx='32' cy='32' r='10' fill='white'/></svg>" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=4.1" />
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
   <main class="game-shell" aria-label="ISHS ARENA 게임">
     <header class="topbar">
       <button class="brand" type="button" data-route="home" aria-label="홈으로 이동"><span class="brand-mark" aria-hidden="true"><i></i></span><span><b>ISHS</b><small>ARENA</small></span></button>
-      <div class="season-pill"><span class="live-dot"></span> PRE-SEASON <b>02</b></div>
+      <div class="season-pill"><span class="live-dot"></span> PRE-SEASON <b>02 · DATA FIX 4.1</b></div>
       <div class="top-actions">
         <button class="icon-button" id="soundToggle" type="button" aria-label="효과음 켜기/끄기"><svg viewBox="0 0 24 24"><path d="M11 5 6.8 8.5H3v7h3.8L11 19V5Zm4.2 3.2a5.5 5.5 0 0 1 0 7.6M18 5a9.6 9.6 0 0 1 0 14"/></svg></button>
         <div class="profile-chip"><span class="avatar">N</span><span><small>PLAYER</small><b>루키 트레이너</b></span></div>
@@ -103,7 +103,7 @@
     <section class="modal data-modal" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle"><header class="modal-header"><div><span class="eyebrow">SAVE DATA</span><h2 id="dataModalTitle">데이터 관리</h2></div><button class="modal-close" type="button" data-close-data aria-label="닫기">×</button></header><div class="data-options"><button type="button" id="exportButton"><span class="data-icon">↓</span><b>데이터 내보내기</b><small>도감과 팀 세팅을 JSON 파일로 저장</small></button><button type="button" id="importButton"><span class="data-icon">↑</span><b>데이터 가져오기</b><small>저장한 JSON 파일 불러오기</small></button><input id="importFile" type="file" accept="application/json" hidden /></div><button class="danger-text-button" id="resetButton" type="button">모든 데이터 초기화</button></section>
   </div>
   <div class="toast-region" id="toastRegion" aria-live="assertive"></div>
-  <script src="multiplayer.js"></script>
-  <script src="app-v2.js"></script>
+  <script src="multiplayer.js?v=4.1"></script>
+  <script src="app-v2.js?v=4.1"></script>
 </body>
 </html>
