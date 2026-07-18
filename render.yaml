@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ishs-arena
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ISHS_DATA_DIR
+        value: /var/data/ishs-arena
+      - key: ISHS_ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: ishs-arena-data
+      mountPath: /var/data
+      sizeGB: 1

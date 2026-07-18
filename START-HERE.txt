@@ -1,0 +1,18 @@
+ISHS ARENA 실행 방법
+====================
+
+1. 이 ZIP 파일을 먼저 압축 해제하세요.
+2. WebStorm이나 브라우저에서 파일을 열지 마세요.
+3. Windows 파일 탐색기에서 START-ISHS-ARENA.cmd를 먼저 더블 클릭하세요.
+4. 검은 서버 창을 닫지 않고 기다리면 브라우저가 자동으로 열립니다.
+5. 자동으로 열리지 않으면 Chrome 주소창에 아래 주소를 입력하세요.
+
+http://localhost:4173
+
+Node.js가 없다는 안내가 나오면 https://nodejs.org/ 에서 Node.js를 설치한 뒤
+START-ISHS-ARENA.cmd를 다시 더블 클릭하세요.
+
+실행 파일이 계속 열리지 않으면 RUN-IN-TERMINAL.txt의 방법을 사용하세요.
+
+중요: index.html 또는 start-server.bat을 WebStorm의 브라우저 미리보기로 열면
+계정과 멀티플레이가 실행되지 않습니다.
