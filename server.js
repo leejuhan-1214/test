@@ -135,7 +135,7 @@ function sanitizeTeamSnapshot(input) {
       moves:moves.map(move=>({
         id:String(move.id||"").slice(0,80),name:String(move.name||"기술").slice(0,50),type:String(move.type||"노말").slice(0,12),category:["physical","special","status"].includes(move.category)?move.category:"status",
         power:Math.max(0,Math.min(500,Number(move.power)||0)),accuracy:move.alwaysHit?1000:Math.max(1,Math.min(100,Number(move.accuracy)||100)),pp:Math.max(1,Math.min(64,Number(move.pp)||20)),priority:Math.max(-7,Math.min(7,Number(move.priority)||0)),
-        contact:!!move.contact,alwaysHit:!!move.alwaysHit,highCrit:!!move.highCrit,variablePower:!!move.variablePower,ohko:!!move.ohko,selfDestruct:!!move.selfDestruct,description:String(move.description||"").slice(0,500),effect:String(move.effect||"").slice(0,40),heal:Number(move.heal)||0,
+        contact:!!move.contact,sound:!!move.sound,punch:!!move.punch,bite:!!move.bite,slicing:!!move.slicing,pulse:!!move.pulse,bullet:!!move.bullet,wind:!!move.wind,alwaysHit:!!move.alwaysHit,highCrit:!!move.highCrit,variablePower:!!move.variablePower,ohko:!!move.ohko,selfDestruct:!!move.selfDestruct,forceSwitch:!!move.forceSwitch,sideCondition:String(move.sideCondition||"").toLowerCase()==="stealthrock"?"stealthrock":"",description:String(move.description||"").slice(0,500),effect:String(move.effect||"").slice(0,40),heal:Number(move.heal)||0,
         inflict:String(move.inflict||"").slice(0,30),selfStages:move.selfStages||null,targetStages:move.targetStages||null,secondary:move.secondary||null,recoil:Number(move.recoil)||0,drain:Number(move.drain)||0,fixedDamage:move.fixedDamage==="level"?"level":Math.max(0,Math.min(999,Number(move.fixedDamage)||0)),multihit:Array.isArray(move.multihit)?move.multihit.slice(0,2):Math.max(0,Math.min(10,Number(move.multihit)||0))
       }))
     };
@@ -167,7 +167,7 @@ function serveStatic(req,res,pathname) {
 }
 async function api(req,res,pathname) {
   try {
-    if(req.method==="GET"&&pathname==="/api/health")return send(res,200,{ok:true,version:"4.1",storage:database?"neon-postgres":process.env.ISHS_DATA_DIR?"persistent-configured":"user-data",updatedAt:store.updatedAt});
+    if(req.method==="GET"&&pathname==="/api/health")return send(res,200,{ok:true,version:"4.2",storage:database?"neon-postgres":process.env.ISHS_DATA_DIR?"persistent-configured":"user-data",updatedAt:store.updatedAt});
     if(req.method==="POST"&&pathname==="/api/auth/signup"){
       const body=await readJson(req),nickname=normalizeNickname(body.nickname),password=String(body.password||"");
       if(!validNickname(nickname))return fail(res,400,"닉네임은 한글·영문·숫자·밑줄 2~16자로 입력하세요.");

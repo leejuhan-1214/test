@@ -13,7 +13,7 @@ const TYPES = {
 };
 
 const STATUS = { burn:"화상", paralysis:"마비", poison:"독", toxic:"맹독", sleep:"잠듦", freeze:"얼음" };
-const STAGE_NAME = { attack:"공격", defense:"방어", spAttack:"특수공격", spDefense:"특수방어", speed:"스피드" };
+const STAGE_NAME = { attack:"공격", defense:"방어", spAttack:"특수공격", spDefense:"특수방어", speed:"스피드", accuracy:"명중률", evasion:"회피율" };
 const STRUGGLE = { id:"struggle", name:"발버둥", type:"노말", category:"physical", power:50, accuracy:100, pp:1, maxPp:1, recoil:.25, description:"사용할 수 있는 기술이 없을 때 쓰는 기술." };
 
 function cleanId(value="") { return String(value).toLowerCase().replace(/[^a-z0-9]/g,""); }
@@ -26,7 +26,8 @@ function log(battle,text,kind="message") {
   battle.log.push({ id:battle.eventId, text, kind, at:Date.now() });
   if (battle.log.length > 50) battle.log.splice(0,battle.log.length - 50);
 }
-function stageMultiplier(stage) { return stage >= 0 ? (2 + stage) / 2 : 2 / (2 - stage); }
+function stageMultiplier(stage) { const value=clamp(stage,-6,6); return value >= 0 ? (2 + value) / 2 : 2 / (2 - value); }
+function accuracyMultiplier(stage) { const value=clamp(stage,-6,6); return value >= 0 ? (3 + value) / 3 : 3 / (3 - value); }
 function effectiveStat(monster,key) {
   let value = Number(monster.stats[key] || 1) * stageMultiplier(monster.stages[key] || 0);
   const ability = abilityId(monster);
@@ -55,7 +56,7 @@ function applyStages(battle,target,changes,opponentCaused=false) {
     if (!(key in target.stages)) continue;
     const before = target.stages[key];
     target.stages[key] = clamp(before + Number(delta),-6,6);
-    if (target.stages[key] !== before) changed.push(`${STAGE_NAME[key] || key} ${delta > 0 ? "상승" : "하락"}`);
+    if (target.stages[key] !== before) { const multiplier=["accuracy","evasion"].includes(key)?accuracyMultiplier(target.stages[key]):stageMultiplier(target.stages[key]); changed.push(`${STAGE_NAME[key] || key} ${delta > 0 ? "상승" : "하락"} (×${Number(multiplier.toFixed(2))})`); }
   }
   if (changed.length) log(battle,`${target.name}의 ${changed.join(" · ")}!`,"stage");
   return changed.length > 0;
@@ -76,7 +77,7 @@ function createCombatant(snapshot) {
     level:clamp(snapshot.level || 50,1,100), type1:snapshot.type1 || "노말", type2:snapshot.type2 || "", stats,
     ability:copy(snapshot.ability || { id:snapshot.abilityId || "", name:snapshot.abilityName || "특성" }),
     moves:(snapshot.moves || []).slice(0,4).map(raw => { const move=copy(raw); move.maxPp=defaultPp(move); move.pp=move.maxPp; return move; }),
-    maxHp, currentHp:maxHp, stages:{attack:0,defense:0,spAttack:0,spDefense:0,speed:0}, status:null, sleepTurns:0, toxicCounter:0,
+    maxHp, currentHp:maxHp, stages:{attack:0,defense:0,spAttack:0,spDefense:0,speed:0,accuracy:0,evasion:0}, status:null, sleepTurns:0, toxicCounter:0,
     fainted:false, protected:false, entered:false, flashFireBoost:false
   };
 }
@@ -95,7 +96,7 @@ function applyEntry(battle,side) {
 }
 function startBattle(teams,nicknames) {
   if (!Array.isArray(teams) || teams.length !== 2 || teams.some(team=>!Array.isArray(team)||team.length<1)) throw new Error("양쪽 팀이 필요합니다.");
-  const battle={ version:1, turn:1, phase:"select", teams:teams.map(team=>team.slice(0,6).map(createCombatant)), active:[0,0], pending:[null,null],
+  const battle={ version:2, turn:1, phase:"select", teams:teams.map(team=>team.slice(0,6).map(createCombatant)), active:[0,0], hazards:[{stealthRock:false},{stealthRock:false}], pending:[null,null],
     nicknames:[String(nicknames?.[0]||"PLAYER 1"),String(nicknames?.[1]||"PLAYER 2")], winner:null, eventId:0, log:[], updatedAt:Date.now() };
   log(battle,`${battle.nicknames[0]}와 ${battle.nicknames[1]}의 배틀이 시작됐다!`,`start`);
   log(battle,`${activeMonster(battle,0).name}! 준비는 됐지?`);
@@ -138,6 +139,7 @@ function preAction(battle,actor) {
 function abilityImmunity(battle,actor,target,move) {
   const source=abilityId(actor), ability=abilityId(target);
   if (["moldbreaker","turboblaze","teravolt"].includes(source)) return false;
+  if (ability==="soundproof" && move.sound) { log(battle,`${target.name}의 방음! 소리 기술이 통하지 않았다.`,`ability`); return true; }
   if (ability==="levitate" && move.type==="땅") { log(battle,`${target.name}의 부유! 공격이 통하지 않았다.`,`ability`); return true; }
   if (ability==="goodasgold" && move.category==="status") { log(battle,`${target.name}의 황금몸! 변화기술이 통하지 않았다.`,`ability`); return true; }
   if (move.type==="물" && ["waterabsorb","dryskin","stormdrain"].includes(ability)) {
@@ -164,6 +166,27 @@ function damageResult(actor,target,move) {
   if (defender==="sturdy" && target.currentHp===target.maxHp && damage>=target.currentHp) damage=target.currentHp-1;
   return {damage,effect,critical};
 }
+function resetSwitchState(monster) {
+  if (!monster) return;
+  for (const key of Object.keys(monster.stages)) monster.stages[key]=0;
+  monster.protected=false; monster.toxicCounter=0; monster.entered=false;
+}
+function applyEntryHazards(battle,side,monster) {
+  if (!monster || monster.fainted || !battle.hazards?.[side]?.stealthRock || abilityId(monster)==="magicguard") return false;
+  const effectiveness=typeEffect({type:"바위"},monster), damage=Math.max(1,Math.floor(monster.maxHp*effectiveness/8));
+  monster.currentHp=Math.max(0,monster.currentHp-damage);
+  log(battle,`${monster.name}에게 뾰족한 바위가 박혔다! (${damage} 데미지)`,`hazard`);
+  if (monster.currentHp<=0) { monster.fainted=true; log(battle,`${monster.name}은 쓰러졌다!`,`faint`); }
+  return true;
+}
+function forceRandomSwitch(battle,side) {
+  const target=activeMonster(battle,side);
+  if (["suctioncups","guarddog"].includes(abilityId(target))) { log(battle,`${target.name}은 ${abilityName(target)}으로 버텼다!`,`ability`); return false; }
+  const candidates=livingIndexes(battle,side).filter(index=>index!==battle.active[side]);
+  if (!candidates.length) { log(battle,`그러나 실패하고 말았다!`,`fail`); return false; }
+  switchMonster(battle,side,candidates[Math.floor(Math.random()*candidates.length)],true);
+  return true;
+}
 function useMove(battle,side,action) {
   const actor=activeMonster(battle,side), target=activeMonster(battle,1-side);
   if (!actor || actor.fainted || !target || target.fainted) return;
@@ -177,10 +200,16 @@ function useMove(battle,side,action) {
   if (move.effect==="protect") { actor.protected=true; log(battle,`${actor.name}은 방어 태세를 취했다!`); return; }
   if (move.effect==="heal") { const before=actor.currentHp; actor.currentHp=Math.min(actor.maxHp,actor.currentHp+Math.max(1,Math.floor(actor.maxHp*(move.heal||.5)))); log(battle,`${actor.name}의 HP가 ${actor.currentHp-before} 회복됐다!`); return; }
   if (move.category==="status" && move.selfStages) { applyStages(battle,actor,move.selfStages); return; }
+  if (move.sideCondition==="stealthrock") {
+    if (battle.hazards[1-side].stealthRock) log(battle,`하지만 이미 스텔스록이 설치되어 있다!`,`fail`);
+    else { battle.hazards[1-side].stealthRock=true; log(battle,`${battle.nicknames[1-side]}의 필드 주위에 뾰족한 바위가 떠올랐다!`,`hazard`); }
+    return;
+  }
   if (target.protected) { log(battle,`${target.name}은 공격을 방어했다!`); return; }
-  const accuracy=move.alwaysHit?1000:Number(move.accuracy||100);
+  const accuracy=move.alwaysHit?1000:Number(move.accuracy||100)*accuracyMultiplier((actor.stages.accuracy||0)-(target.stages.evasion||0));
   if (Math.random()*100>accuracy) { log(battle,`${actor.name}의 공격은 빗나갔다!`,`miss`); return; }
   if (abilityImmunity(battle,actor,target,move)) return;
+  if (move.forceSwitch) { forceRandomSwitch(battle,1-side); return; }
   if (move.category==="status" && move.inflict) {
     if (typeEffect(move,target)===0) log(battle,`${target.name}에게는 효과가 없다…`,`immune`);
     else if (!inflictStatus(battle,target,move.inflict)) log(battle,`${target.name}에게는 상태이상이 통하지 않았다.`);
@@ -222,9 +251,10 @@ function switchMonster(battle,side,targetIndex,forced=false) {
   const team=battle.teams[side], before=activeMonster(battle,side), next=team[targetIndex];
   if (!next || next.fainted || next.currentHp<=0 || battle.active[side]===targetIndex) throw new Error("교체할 수 없는 몬스터입니다.");
   if (before && !before.fainted && !forced) log(battle,`${before.name}, 돌아와!`);
-  battle.active[side]=targetIndex; next.entered=false;
-  log(battle,`${next.name}! 너로 정했다!`,`switch`);
-  applyEntry(battle,side);
+  resetSwitchState(before); battle.active[side]=targetIndex; resetSwitchState(next);
+  log(battle,forced?`${before?.name||"몬스터"}은 강제로 돌아가고 ${next.name}이 끌려 나왔다!`:`${next.name}! 너로 정했다!`,`switch`);
+  applyEntryHazards(battle,side,next);
+  if (!next.fainted) applyEntry(battle,side);
 }
 function endTurn(battle) {
   for (let side=0;side<2;side+=1) {
@@ -257,7 +287,10 @@ function resolveTurn(battle) {
   const actions=battle.pending.map((action,side)=>({...action,side})).filter(action=>action.kind!=="wait");
   if (battle.phase==="forcedSwitch") {
     for (const action of actions) switchMonster(battle,action.side,action.targetIndex,true);
-    battle.phase="select"; battle.forced=[false,false]; battle.pending=[null,null]; battle.updatedAt=Date.now(); return;
+    const forced=[activeMonster(battle,0)?.fainted||false,activeMonster(battle,1)?.fainted||false];
+    if (forced[0]||forced[1]) { battle.phase="forcedSwitch"; battle.forced=forced; battle.pending=[forced[0]?null:{kind:"wait"},forced[1]?null:{kind:"wait"}]; }
+    else { battle.phase="select"; battle.forced=[false,false]; battle.pending=[null,null]; }
+    battle.updatedAt=Date.now(); return;
   }
   actions.sort((left,right)=>{
     const lp=left.kind==="switch"?10:Number(activeMonster(battle,left.side)?.moves[left.moveIndex]?.priority||0);
@@ -302,4 +335,4 @@ function publicBattle(battle,viewerSide) {
   return data;
 }
 
-module.exports={startBattle,submitAction,publicBattle,createCombatant,typeEffect,effectiveStat};
+module.exports={startBattle,submitAction,publicBattle,createCombatant,typeEffect,effectiveStat,stageMultiplier,accuracyMultiplier};
